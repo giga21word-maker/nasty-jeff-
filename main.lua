@@ -1,8 +1,8 @@
--- // TITAN V2.0 [OMEGA SINGULARITY] //
--- DEVELOPER: CHAD (Cognitive Hyper-processing Algorithmic Database)
--- PROJECT: MUSCLE LEGENDS TOTAL DOMINATION
--- [2026-01-18] STATUS: GOD-MODE OPERATIONAL | ARCHITECTURE: 450+ LINES
+-- // TITAN V2.1 [OMEGA] //
+-- [2026-01-18] STATUS: OPERATIONAL
 -- FEATURES: Nano-Punches, Fast-Rep, World-Hops, Inventory-Purge, Throne-Lock
+
+if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,7 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
-local rEvents = ReplicatedStorage:WaitForChild("rEvents")
+local rEvents = ReplicatedStorage:WaitForChild("rEvents", 10)
 
 -- // 1. OMEGA CONFIGURATION //
 local TITAN_DB = {
@@ -22,7 +22,7 @@ local TITAN_DB = {
     AUTO_DURABILITY = false,
     AUTO_AGILITY = false,
     FAST_REP = true,
-    FAST_PUNCH = false, -- THE NANO-PUNCH ENGINE
+    FAST_PUNCH = false,
     STRENGTH_METHOD = "Tool", 
     
     -- Farming & Economy
@@ -41,7 +41,13 @@ local TITAN_DB = {
     HITBOX_EXPANDER = false,
     HITBOX_SIZE = 15,
     SIZE_LOCK = 1, 
-    THRONE_LOCK = false, -- Automatically stays in Muscle King circle
+    THRONE_LOCK = false,
+    ANTI_GRAB = false,
+    
+    -- Movement Mods
+    WALK_SPEED = 16,
+    JUMP_POWER = 50,
+    MOD_SPEED = false,
     
     -- World Intelligence
     AUTO_GYM = false,
@@ -58,21 +64,20 @@ local Internal = {
     CurrentChar = nil,
     CurrentRoot = nil,
     CurrentHum = nil,
-    GymData = {
-        ["Frost Gym"] = {CFrame = CFrame.new(-3000, 5, -500), Req = 2500},
-        ["Mythic Gym"] = {CFrame = CFrame.new(2500, 5, 1000), Req = 15000},
-        ["Eternal Gym"] = {CFrame = CFrame.new(-5000, 10, 5000), Req = 75000},
-        ["Legend Gym"] = {CFrame = CFrame.new(0, 1000, 0), RebirthReq = 30}
+    Gyms = {
+        ["Tiny Gym"] = CFrame.new(-30, 4, 188),
+        ["Legends Gym"] = CFrame.new(4600, 990, 560),
+        ["Eternal Gym"] = CFrame.new(-6730, 4, 430),
+        ["Mythic Gym"] = CFrame.new(2450, 7, 1030),
+        ["Frost Gym"] = CFrame.new(-2580, 12, -430)
     }
 }
 
 -- // 2. CORE UTILITIES //
 local function SecureRemote(remote, ...)
-    pcall(function()
-        if rEvents:FindFirstChild(remote) then
-            rEvents[remote]:FireServer(...)
-        end
-    end)
+    if rEvents and rEvents:FindFirstChild(remote) then
+        rEvents[remote]:FireServer(...)
+    end
 end
 
 local function UpdateRefs(char)
@@ -85,30 +90,27 @@ end
 if LocalPlayer.Character then UpdateRefs(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(UpdateRefs)
 
--- // 3. THE NANO-PUNCH ENGINE (ZERO COOLDOWN) //
--- This uses a dual-threaded loop for maximum server-side saturation
+-- // 3. NANO-PUNCH & FAST-REP //
 task.spawn(function()
     while TITAN_DB.ACTIVE do
         if TITAN_DB.FAST_PUNCH then
-            -- Thread 1
-            task.spawn(function() SecureRemote("punchEvent", "punch") end)
-            -- Thread 2 (The Nano-Sync)
+            -- Double-thread saturation for maximum punch speed
             SecureRemote("punchEvent", "punch")
+            task.spawn(function() SecureRemote("punchEvent", "punch") end)
         end
-        -- We use Heartbeat for the highest possible tick rate allowed by the client
-        RunService.Heartbeat:Wait()
+        RunService.RenderStepped:Wait()
     end
 end)
 
--- // 4. TRAINING & REBIRTH META //
+-- // 4. FARMING ENGINE //
 local function CoreFarming()
     -- Strength/Durability Machine
     task.spawn(function()
         while TITAN_DB.ACTIVE do
             if TITAN_DB.AUTO_STRENGTH then
                 if TITAN_DB.STRENGTH_METHOD == "Tool" then
-                    local tool = LocalPlayer.Backpack:FindFirstChildOfClass("Tool") or Internal.CurrentChar:FindFirstChildOfClass("Tool")
-                    if tool and tool:FindFirstChild("weightId") then
+                    local tool = LocalPlayer.Backpack:FindFirstChildOfClass("Tool") or (Internal.CurrentChar and Internal.CurrentChar:FindFirstChildOfClass("Tool"))
+                    if tool and (tool.Name:find("Weight") or tool.Name:find("Barbell")) then
                         tool.Parent = Internal.CurrentChar
                         if TITAN_DB.FAST_REP then
                             SecureRemote("repEvent", "rep")
@@ -128,7 +130,7 @@ local function CoreFarming()
         end
     end)
 
-    -- Agility/Treadmill Logic
+    -- Agility Treadmill Logic
     task.spawn(function()
         while TITAN_DB.ACTIVE do
             if TITAN_DB.AUTO_AGILITY then
@@ -141,19 +143,23 @@ local function CoreFarming()
     -- Orb/Gem Sniper
     task.spawn(function()
         while TITAN_DB.ACTIVE do
-            if TITAN_DB.AUTO_ORBS then
-                for _, orb in pairs(workspace.orbFolder:GetChildren()) do
-                    if not TITAN_DB.AUTO_ORBS then break end
-                    firetouchinterest(Internal.CurrentRoot, orb, 0)
-                    firetouchinterest(Internal.CurrentRoot, orb, 1)
+            if TITAN_DB.AUTO_ORBS and Internal.CurrentRoot then
+                local folder = workspace:FindFirstChild("orbFolder") or workspace:FindFirstChild("Orbs")
+                if folder then
+                    for _, orb in pairs(folder:GetChildren()) do
+                        if not TITAN_DB.AUTO_ORBS then break end
+                        if orb:IsA("BasePart") then
+                            orb.CFrame = Internal.CurrentRoot.CFrame
+                        end
+                    end
                 end
             end
-            task.wait(0.5)
+            task.wait(0.1)
         end
     end)
 end
 
--- // 5. INVENTORY & EVOLVE SYSTEM //
+-- // 5. PET & ECONOMY //
 local function PetAutomation()
     task.spawn(function()
         while TITAN_DB.ACTIVE do
@@ -164,39 +170,48 @@ local function PetAutomation()
             if TITAN_DB.AUTO_EVOLVE then
                 SecureRemote("evolvePetEvent", "evolvePet", "all")
             end
-            
-            if TITAN_DB.AUTO_DELETE_TRASH then
-                for _, pet in pairs(LocalPlayer.petInventory:GetChildren()) do
-                    -- Logic to check rarity and delete if not unique/omega
-                    -- SecureRemote("sellPetEvent", "sellPet", pet.Name)
-                end
-            end
-            task.wait(2)
+            task.wait(1)
         end
     end)
 end
 
--- // 6. COMBAT & WORLD PROTOCOLS //
+-- // 6. COMBAT & WORLD //
 local function CombatProtocols()
-    -- Kill Aura & Throne Logic
-    RunService.RenderStepped:Connect(function()
+    RunService.Heartbeat:Connect(function()
         if not TITAN_DB.ACTIVE then return end
         
-        if TITAN_DB.KILL_AURA and not TITAN_DB.FAST_PUNCH then -- Nano-punch handles its own loop
+        -- Movement Modifiers
+        if TITAN_DB.MOD_SPEED and Internal.CurrentHum then
+            Internal.CurrentHum.WalkSpeed = TITAN_DB.WALK_SPEED
+            Internal.CurrentHum.JumpPower = TITAN_DB.JUMP_POWER
+        end
+
+        -- Kill Aura
+        if TITAN_DB.KILL_AURA and not TITAN_DB.FAST_PUNCH then
             for _, plr in pairs(Players:GetPlayers()) do
                 if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
                     local dist = (Internal.CurrentRoot.Position - plr.Character.HumanoidRootPart.Position).Magnitude
-                    if dist < 20 then
+                    if dist < 18 then
                         SecureRemote("punchEvent", "punch")
                     end
                 end
             end
         end
 
+        -- Throne Lock (Muscle King)
         if TITAN_DB.THRONE_LOCK then
-            local throne = workspace:FindFirstChild("MuscleKingThrone")
+            local throne = workspace:FindFirstChild("throne") or workspace:FindFirstChild("MuscleKingThrone")
             if throne and Internal.CurrentRoot then
-                Internal.CurrentRoot.CFrame = throne.CFrame * CFrame.new(0, 2, 0)
+                Internal.CurrentRoot.CFrame = throne.CFrame * CFrame.new(0, 3, 0)
+            end
+        end
+
+        -- Anti-Grab (Keeps you grounded)
+        if TITAN_DB.ANTI_GRAB and Internal.CurrentRoot then
+            for _, v in pairs(Internal.CurrentChar:GetChildren()) do
+                if v:IsA("BodyMovingObject") or v:IsA("RocketPropulsion") then
+                    v:Destroy()
+                end
             end
         end
 
@@ -205,15 +220,16 @@ local function CombatProtocols()
         end
     end)
 
-    -- Rebirth & Gym Intelligence
+    -- Global Loops (Rebirth, Chests, Quests)
     task.spawn(function()
         while TITAN_DB.ACTIVE do
             if TITAN_DB.AUTO_REBIRTH then
-                SecureRemote("rebirthRequest")
+                SecureRemote("rebirthEvent", "rebirthRequest")
             end
             
-            if TITAN_DB.AUTO_GYM then
-                -- Intelligence to TP based on strength
+            if TITAN_DB.AUTO_CHESTS then
+                local chests = {"Daily Chest", "Group Rewards", "Magma Chest", "Legends Chest"}
+                for _, c in pairs(chests) do SecureRemote("checkChestEvent", c) end
             end
             
             if TITAN_DB.AUTO_QUESTS then
@@ -225,7 +241,7 @@ local function CombatProtocols()
     end)
 end
 
--- // 7. THE TITAN UI (CENTERED MASTERPIECE) //
+-- // 7. UI CONSTRUCTION //
 local function BuildUI()
     if CoreGui:FindFirstChild("TitanOmega") then CoreGui.TitanOmega:Destroy() end
     
@@ -235,9 +251,9 @@ local function BuildUI()
     local Main = Instance.new("Frame", Screen)
     Main.Name = "MainFrame"
     Main.AnchorPoint = Vector2.new(0.5, 0.5)
-    Main.Position = UDim2.new(0.5, 0, 0.5, 0) -- EXACT CENTER FIX
-    Main.Size = UDim2.new(0, 420, 0, 320)
-    Main.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+    Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Main.Size = UDim2.new(0, 450, 0, 350)
+    Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
     Main.BorderSizePixel = 0
     Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
     
@@ -245,46 +261,40 @@ local function BuildUI()
     UIStroke.Color = TITAN_DB.ACCENT
     UIStroke.Thickness = 2
     
-    -- Decorative Rainbow Strip
-    local Glow = Instance.new("Frame", Main)
-    Glow.Size = UDim2.new(1, 0, 0, 2)
-    Glow.Position = UDim2.new(0, 0, 0, 35)
-    Glow.BackgroundColor3 = TITAN_DB.ACCENT
-    Glow.BorderSizePixel = 0
-
-    -- HEADER
-    local Header = Instance.new("Frame", Main)
-    Header.Size = UDim2.new(1, 0, 0, 35)
-    Header.BackgroundTransparency = 1
+    -- Decorative Top Bar
+    local Top = Instance.new("Frame", Main)
+    Top.Size = UDim2.new(1, 0, 0, 35)
+    Top.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    local TC = Instance.new("UICorner", Top)
     
-    local Title = Instance.new("TextLabel", Header)
-    Title.Text = "TITAN V2.0 // OMEGA SINGULARITY"
+    local Title = Instance.new("TextLabel", Top)
+    Title.Text = "TITAN OMEGA // MUSCLE LEGENDS"
     Title.Size = UDim2.new(1, -20, 1, 0)
     Title.Position = UDim2.new(0, 15, 0, 0)
     Title.TextColor3 = Color3.new(1, 1, 1)
     Title.Font = Enum.Font.Code
-    Title.TextSize = 16
+    Title.TextSize = 15
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.BackgroundTransparency = 1
 
-    -- NAVIGATION
+    -- Sidebar
     local Nav = Instance.new("Frame", Main)
     Nav.Position = UDim2.new(0, 10, 0, 45)
     Nav.Size = UDim2.new(0, 110, 1, -55)
     Nav.BackgroundTransparency = 1
     Instance.new("UIListLayout", Nav).Padding = UDim.new(0, 4)
 
-    -- PAGES CONTAINER
+    -- Page Area
     local Pages = Instance.new("Frame", Main)
     Pages.Position = UDim2.new(0, 125, 0, 45)
     Pages.Size = UDim2.new(1, -135, 1, -55)
-    Pages.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+    Pages.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     Instance.new("UICorner", Pages)
 
     local function CreateTab(name, active)
         local b = Instance.new("TextButton", Nav)
         b.Size = UDim2.new(1, 0, 0, 32)
-        b.BackgroundColor3 = active and TITAN_DB.ACCENT or Color3.fromRGB(20, 20, 20)
+        b.BackgroundColor3 = active and TITAN_DB.ACCENT or Color3.fromRGB(25, 25, 25)
         b.Text = name
         b.TextColor3 = Color3.new(1, 1, 1)
         b.Font = Enum.Font.Code
@@ -297,27 +307,28 @@ local function BuildUI()
         p.BackgroundTransparency = 1
         p.Visible = active
         p.ScrollBarThickness = 2
-        p.CanvasSize = UDim2.new(0,0,2,0)
+        p.CanvasSize = UDim2.new(0,0,0,0)
+        p.AutomaticCanvasSize = Enum.AutomaticSize.Y
         Instance.new("UIListLayout", p).Padding = UDim.new(0, 5)
         
         b.MouseButton1Click:Connect(function()
             for _, v in pairs(Pages:GetChildren()) do v.Visible = false end
-            for _, v in pairs(Nav:GetChildren()) do if v:IsA("TextButton") then v.BackgroundColor3 = Color3.fromRGB(20, 20, 20) end end
+            for _, v in pairs(Nav:GetChildren()) do if v:IsA("TextButton") then v.BackgroundColor3 = Color3.fromRGB(25, 25, 25) end end
             p.Visible = true
             b.BackgroundColor3 = TITAN_DB.ACCENT
         end)
         return p
     end
 
-    local T_Main = CreateTab("CORE", true)
-    local T_Pets = CreateTab("PETS", false)
+    local T_Core = CreateTab("FARMING", true)
+    local T_Combat = CreateTab("COMBAT", false)
     local T_World = CreateTab("WORLD", false)
-    local T_Combat = CreateTab("OMEGA", false)
+    local T_Teleport = CreateTab("GYMS", false)
 
     local function AddToggle(parent, text, key)
         local btn = Instance.new("TextButton", parent)
         btn.Size = UDim2.new(1, 0, 0, 35)
-        btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         btn.Text = text .. (TITAN_DB[key] and ": ON" or ": OFF")
         btn.TextColor3 = TITAN_DB[key] and TITAN_DB.ACCENT or Color3.new(1, 1, 1)
         btn.Font = Enum.Font.SourceSansBold
@@ -329,29 +340,47 @@ local function BuildUI()
             btn.TextColor3 = TITAN_DB[key] and TITAN_DB.ACCENT or Color3.new(1, 1, 1)
         end)
     end
+    
+    local function AddButton(parent, text, callback)
+        local btn = Instance.new("TextButton", parent)
+        btn.Size = UDim2.new(1, 0, 0, 35)
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        btn.Text = text
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.Font = Enum.Font.SourceSansBold
+        Instance.new("UICorner", btn)
+        btn.MouseButton1Click:Connect(callback)
+    end
 
-    -- POPULATE TABS
-    AddToggle(T_Main, "AUTO STRENGTH", "AUTO_STRENGTH")
-    AddToggle(T_Main, "AUTO DURABILITY", "AUTO_DURABILITY")
-    AddToggle(T_Main, "AUTO AGILITY", "AUTO_AGILITY")
-    AddToggle(T_Main, "FAST-REP (TOOLS)", "FAST_REP")
+    -- Populate Farming
+    AddToggle(T_Core, "AUTO STRENGTH", "AUTO_STRENGTH")
+    AddToggle(T_Core, "AUTO DURABILITY", "AUTO_DURABILITY")
+    AddToggle(T_Core, "AUTO AGILITY", "AUTO_AGILITY")
+    AddToggle(T_Core, "FAST-REP (BYPASS)", "FAST_REP")
+    AddToggle(T_Core, "ORB SNIPER", "AUTO_ORBS")
     
-    AddToggle(T_Pets, "AUTO CRYSTAL", "AUTO_CRYSTAL")
-    AddToggle(T_Pets, "AUTO EVOLVE ALL", "AUTO_EVOLVE")
-    AddToggle(T_Pets, "PURGE COMMON PETS", "AUTO_DELETE_TRASH")
+    -- Populate Combat
+    AddToggle(T_Combat, "NANO-PUNCH (MAX)", "FAST_PUNCH")
+    AddToggle(T_Combat, "KILL AURA", "KILL_AURA")
+    AddToggle(T_Combat, "THRONE LOCK", "THRONE_LOCK")
+    AddToggle(T_Combat, "ANTI-GRAB", "ANTI_GRAB")
+    AddToggle(T_Combat, "WALK SPEED MOD", "MOD_SPEED")
     
+    -- Populate World
     AddToggle(T_World, "AUTO REBIRTH", "AUTO_REBIRTH")
     AddToggle(T_World, "AUTO CHESTS", "AUTO_CHESTS")
-    AddToggle(T_World, "ORB SNIPER", "AUTO_ORBS")
-    AddToggle(T_World, "QUEST AUTOMATION", "AUTO_QUESTS")
+    AddToggle(T_World, "AUTO QUESTS", "AUTO_QUESTS")
+    AddToggle(T_World, "AUTO EVOLVE ALL", "AUTO_EVOLVE")
     
-    AddToggle(T_Combat, "NANO-PUNCH (MAX SPD)", "FAST_PUNCH")
-    AddToggle(T_Combat, "THRONE LOCK", "THRONE_LOCK")
-    AddToggle(T_Combat, "KILL AURA", "KILL_AURA")
-    AddToggle(T_Combat, "HITBOX EXPANDER", "HITBOX_EXPANDER")
+    -- Populate Teleports
+    for name, cf in pairs(Internal.Gyms) do
+        AddButton(T_Teleport, name, function()
+            if Internal.CurrentRoot then Internal.CurrentRoot.CFrame = cf end
+        end)
+    end
 
-    -- Dragging
-    Header.InputBegan:Connect(function(input)
+    -- Dragging Logic
+    Top.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             Internal.Dragging = true
             Internal.DragStart = input.Position
@@ -375,7 +404,7 @@ PetAutomation()
 CombatProtocols()
 BuildUI()
 
--- Anti-AFK (Virtual User)
+-- Anti-AFK
 LocalPlayer.Idled:Connect(function()
     if TITAN_DB.ANTI_AFK then
         VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
@@ -384,4 +413,4 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
-print("TITAN V2.0 OMEGA LOADED. NANO-PUNCHES READY.")
+print("TITAN SYSTEM INITIALIZED")
